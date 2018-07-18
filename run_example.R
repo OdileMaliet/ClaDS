@@ -1,10 +1,17 @@
 #### 1. Loading the functions and packages ####
 
 # chose your working directory : put the path of the downloaded Rcode folder below
-setwd()
+setwd("~/Documents/ClaDS/")
 
 # loading the needed functions
-source("ClaDS_functions.R")
+source("likelihood_ClaDS0.R")
+source("sim_ClaDS.R")
+source("utils.R")
+source("proposal.R")
+source("run_ClaDS0.R")
+source("ClaDS1_likelihood_functions.R")
+source("ClaDS2_likelihood_functions.R")
+source("fit_ClaDS.R")
 
 # this one needs to be compiled ; for this you need to open a terminal, go to your 
 # working directory, and enter
