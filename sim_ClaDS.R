@@ -4,7 +4,7 @@ library(phytools)
 
 sim_ClaDS <- function (lamb_par, mu_par,theta=1,
                                        f.lamb=function(x,y){y}, f.mu=function(x,y){y}, 
-                                       lamb_shift=1,relative_death=mu_par,
+                                       lamb_shift=1,
                                        new_lamb_law="lognormal*shift",new_mu_law="turnover",alpha=0, 
                                        sigma=0.1,lamb_max=1,lamb_min=0,mu_min=mu_par,mu_max=mu_par, 
                                        time.stop = 0, 
@@ -46,6 +46,7 @@ sim_ClaDS <- function (lamb_par, mu_par,theta=1,
 # list$times and list$nblineages speciation times and corresponding number of lineages 
 
 {
+  relative_death=mu_par
   if(new_mu_law=="turnover"){ mu_par=mu_par*lamb_par}
   lamb=lamb_par
   mu=mu_par
@@ -134,6 +135,7 @@ sim_ClaDS <- function (lamb_par, mu_par,theta=1,
             new_mu=lamb[length(lamb)]-relative_death
             mu=c(mu,max(0,new_mu))
           }else if (new_mu_law=="turnover"){
+            
             new_mu=lamb[length(lamb)]*relative_death
             mu=c(mu,new_mu)
           }else if (new_mu_law=="lognormal"){
@@ -353,8 +355,8 @@ sim_ClaDS <- function (lamb_par, mu_par,theta=1,
     }
     }
     							
-	if (sum(alive)==0) {obj<-NULL}
- 	else if (sum(alive)==1) {obj<-list(nbTaxa=1,"maxRate"=tooHigh)}
+	if ((sum(alive)==0 & prune.extinct) | length(nblineages)==2) {obj<-NULL; root_length=t}
+ 	else if (sum(alive)==1 & prune.extinct) {obj<-list(nbTaxa=1,"maxRate"=tooHigh); root_length=t}
  	else {
  	  edge.length[alive] <- t - stem.depth[alive]
  	  n <- -1
@@ -381,10 +383,12 @@ sim_ClaDS <- function (lamb_par, mu_par,theta=1,
     rep=prune.extinct.with.rates(obj,rates)
     obj=rep$tree
     rates=rep$rates
-    }
-    #obj<-drop.extinct(obj)}
-  return(list("tree"=obj,"times"=times,"nblineages"=nblineages,"rates"=rates,"lamb"=lamb,"mu"=mu,"maxRate"=tooHigh))
+  }
+   root_length=t-max(node.depth.edgelength(obj))
+
  	}
+  return(list("tree"=obj,"times"=times,"nblineages"=nblineages,"rates"=rates,"lamb"=lamb,"mu"=mu,"maxRate"=tooHigh,"root_length"=root_length))
+  
   }
 
 prune.extinct.with.rates=function(phy,rates,extinct=NULL)
@@ -426,7 +430,11 @@ rigth.order=function(phy,rates){
   phy$edge[,2]=order[phy$edge[,2]]
   order=order(phy$edge[,2])
   phy$edge=phy$edge[order,]
-  rates=rates[order]
+  if(inherits(rates,"list")){
+    rates=lapply(rates,function(x){x[order]})
+  }else{
+    rates=rates[order]
+  }
   phy$edge.length=phy$edge.length[order]
   itip=1
   inode=n+1
