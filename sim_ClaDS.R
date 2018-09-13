@@ -46,15 +46,17 @@ sim_ClaDS <- function (lamb_par, mu_par,theta=1,
 # list$times and list$nblineages speciation times and corresponding number of lineages 
 
 {
+
   relative_death=mu_par
   if(new_mu_law=="turnover"){ mu_par=mu_par*lamb_par}
-  lamb=lamb_par
-  mu=mu_par
-  rates=c()
-  nShift=0
-  tooHigh=F
   
   while (1) {
+    
+    lamb=lamb_par
+    mu=mu_par
+    rates=c()
+    nShift=0
+    tooHigh=F
     
     nblineages<-c(1)
     times<-c(0)
