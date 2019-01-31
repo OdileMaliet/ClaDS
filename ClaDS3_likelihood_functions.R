@@ -12,8 +12,7 @@ source("MPhiNoFFT.class.R")
 
 ######functions#############
 
-
-Phi_ClaDS2=function(sigma,alpha,mlambda,Mlambda,nlambda,mu,f,tini=0,tf=100,by=0.1,method="Higham08.b"){
+Phi_ClaDS3=function(sigma,alpha,mlambda,Mlambda,nlambda,mu,f,tini=0,tf=100,by=0.1,method="Higham08.b"){
   lambdaIs = seq(log(mlambda),log(Mlambda),length=nlambda+1)
   
   if (substring(method,1,3) == "FFT") {
@@ -51,7 +50,7 @@ Phi_ClaDS2=function(sigma,alpha,mlambda,Mlambda,nlambda,mu,f,tini=0,tf=100,by=0.
   MATVECT <- selectMethod(applyV, c(class(M), class(ini)))
   dPhi=function(t,y,parms){
     
-    dy=expLambda*(MATVECT(M, y)^2-y)+mu*expLambda*(1-y)
+    dy=mu*(MATVECT(M, y)^2-y)+expLambda*(1-y)
     return(list(dy))
   }
   
@@ -117,9 +116,9 @@ InterpolatedKhi=function(phi,m,lambda){
 #    Omega(h) = (h/6)*(B1 + 4 B2 + B3) - (h*h/12) [B1,B3]
 #    Y(n+1) = exp(Omega(h)) Y(n)
 
-MagnusExpansion_ClaDS2=function(phi,ini,tini,tend,step,conv=1e-10,mask_val=-20,timeIni,timeEnd){
-  expLambda=phi$expLambda
-  mu=phi$mu*expLambda
+MagnusExpansion_ClaDS3=function(phi,ini,tini,tend,step,conv=1e-10,mask_val=-20,timeIni,timeEnd){
+  expLambda=phi$mu
+  mu=phi$expLambda
   timePhi=phi$fun[,1]
   M=phi$M
   iniRep=ini
@@ -202,12 +201,143 @@ MagnusExpansion_ClaDS2=function(phi,ini,tini,tend,step,conv=1e-10,mask_val=-20,t
     EXPOV[mask] = 0
     ini = EXPOV
   }
-  EXPOV[mask] = exp(- (expLambda[mask]+mu[mask])*(timeEnd - timeIni))*iniRep[mask]
+  EXPOV[mask] = exp(- (expLambda+mu[mask])*(timeEnd - timeIni))*iniRep[mask]
   return(EXPOV)
 }
 
-Khi_ClaDS2=function(phi,s,t,func="Khi",lambda1=0,lambda2=0,lambdas=phi$lambda,M=phi$M,mu=phi$mu,
+MagnusExpansion_ClaDS3=function(phi,ini,tini,tend,step,conv=1e-10,mask_val=-20,timeIni,timeEnd){
+  expLambda=phi$mu
+  mu=phi$expLambda
+  timePhi=phi$fun[,1]
+  M=phi$M
+  iniRep=ini
+  if(tend<(tini+step)) tend=tini+step
+  MATVECT <- selectMethod(applyV, c(class(M), class(ini)))
+  tStep=step*diff(timePhi)[1]
+  S=seq(timeIni, max(timeIni,timeEnd-tStep), by=tStep)
+  if(length(S)==1) {
+    h=timeEnd-timeIni
+  }else{
+    h = S[2]-S[1]
+  }
+  D0 = expLambda+mu
+  mask = - (expLambda+mu)*h < mask_val
+  D3 = expLambda*MATVECT(M, phi$fun[tini+step,-1])
+  for (i in S) {
+    if(length(S)==1){
+      phi123 = InterpolatedPhi(phi,timeIni) + 4 * InterpolatedPhi(phi,(timeEnd+timeIni)/2) + InterpolatedPhi(phi,timeEnd)
+      D1 = D3
+      D3 = expLambda*MATVECT(M, InterpolatedPhi(phi,timeEnd))
+    }else{
+      phi123 = InterpolatedPhi(phi,i)+ 4 * InterpolatedPhi(phi,i+tStep/2) + InterpolatedPhi(phi,i+tStep)
+      D1 = D3
+      D3 = expLambda*MATVECT(M,InterpolatedPhi(phi,i+tStep))
+    }
+    D123 = expLambda*MATVECT(M,phi123)
+    
+    ini[mask] = 0
+    EXPOV=ini
+    OV=ini
+    k=1
+    epsnormv = 1e-4 * sum(abs(OV))
+    end=0
+    while (sum(abs(OV)) > epsnormv & end < 1e3){
+      end=end+1
+      MOV = MATVECT(M,OV)
+      OV = - h*D0*OV + (h/3)*D123*MOV + (h*h/6)*(D3-D1)*(D0*MOV - MATVECT(M,D0*OV)) - (h*h/3)*(D1*MATVECT(M,D3*MOV)-D3*MATVECT(M,D1*MOV))
+      OV = OV/k
+      OV[mask] = 0
+      EXPOV = EXPOV + OV
+      k=k+1
+    }
+    if(end==1e3){EXPOV[]=0}
+    EXPOV[mask] = 0
+    ini = EXPOV
+  }
+  EXPOV[mask] = exp(- (expLambda+mu[mask])*(timeEnd - timeIni))*iniRep[mask]
+  return(EXPOV)
+}
+
+Khi_ClaDS3=function(phi,s,t,func="Khi",lambda1=0,lambda2=0,lambdas=phi$lambda,M=phi$M,mu=phi$mu,
              timePhi=phi$fun[,1],nt=1000,method="Higham08.b",sparse=F,interval=2,conv=1e-10){
+  
+  if((0.99*t)>phi$fun[nrow(phi$fun),1]) return(rep(1e-300,length(phi$expLambda)))
+  if( !(func %in% c("Khi","Psi","Ksi","Zeta"))){stop("the function is not known")}
+  if(any(is.na(phi$fun))){stop("Phi is NA")}
+  
+  tini=which.min(abs(timePhi-s))
+  tend=which.min(abs(timePhi-t))
+  nlambda=length(lambdas)
+  expLambda=phi$expLambda
+  # print(c(tini,tend))
+  
+  if(func=="Khi" | func=="Psi"){
+    
+    ini=1-phi$fun[tini,-1]  
+    
+  }else{
+    #on transforme la proba d'être dans un intervalle (de taille lambdas[2]-lambdas[1]) en densité 
+    if (T){#(substring(method,1,3) == "FFT")
+      # indL=c(which.min(abs(lambdas-lambda1)),which.min(abs(lambdas-lambda2)))
+      # temp = (1-phi$fun[tini,indL[1]+1])*(1-phi$fun[tini,indL[2]+1])/(lambdas[2]-lambdas[1])^2  
+      # temp = 1/(lambdas[2]-lambdas[1])^2  
+      ini=mu*dnorm(lambda1,lambdas+log(phi$alpha),phi$sigma)*dnorm(lambda2,lambdas+log(phi$alpha),phi$sigma)
+      
+      # ini = temp*(M[indL[1],]*M[indL[2],]*expLambda)
+    }else{
+      indL=c(which.min(abs(lambdas-lambda1)),which.min(abs(lambdas-lambda2)))
+      i1=max(min(length(expLambda),indL[1]+floor(log(alpha)/(lambdas[2]-lambdas[1]))),1)
+      i2=max(min(length(expLambda),indL[2]+floor(log(alpha)/(lambdas[2]-lambdas[1]))),1)
+      temp = 1#(1-phi$fun[tini,indL[1]+1])*(1-phi$fun[tini,indL[2]+1])/(lambdas[2]-lambdas[1])^2  
+      ini = temp*(M[i1,]*M[i2,]*expLambda)
+    }
+  }
+  
+  if(method == "ode"){
+    MATVECT <- selectMethod(applyV, c(class(M), class(ini)))
+    dKhi=function(t,y,parms){
+      tindex=which.min(abs(timePhi-t))
+      dy=2*expLambda*((MATVECT(M,y))*(MATVECT(M,phi$fun[tindex,2:ncol(phi$fun)]))) - (expLambda*(1+mu))*y
+      return(list(dy))
+    }
+    out <- ode(y = ini, times = timePhi, func = dKhi, parms = NULL)
+    rep = out[tend,-1]
+    
+  }else{
+    inter=min(interval,(t-s)/(phi$fun[2,1]-phi$fun[1,1]))
+    do=T
+    while(do){
+      done=T
+      rep = try(MagnusExpansion_ClaDS3(phi,ini,tini,tend,inter,conv=conv,timeIni=s,timeEnd=t))
+      do=inherits(rep,"try-error")
+      # if(! do) do=(min(rep)<0)
+      if(! do & func=="Khi"){ do=(max(rep)>1)}else{do=(max(rep)>(max(1+exp(mu*(s-t)))*max(ini)))}# | any(rep<0))}
+      inter=(inter/2)
+      if(do){
+        done=F
+        do=(inter>1e-1)
+      }
+    }
+  }
+  if(! done) rep=exp(- (expLambda+phi$mu)*(t - s))*ini
+  changeRep=(! is.finite(rep) | rep<=0)
+  rep[changeRep]=exp(- (expLambda[changeRep]+phi$mu)*(t - s))*ini[changeRep]#1e-310#1e-10*min(rep[is.finite(rep)])
+  rep[rep==0]=1e-300
+  if(func=="Psi"|func=="Zeta"){
+    rep=rep/(1-phi$fun[tend,-1])
+    changeRep=(! is.finite(rep) | rep<=0)
+    # if(sum(is.finite(rep))>0){
+    rep[changeRep]=exp(- (expLambda[changeRep]+phi$mu)*(t - s))*ini[changeRep]#1e-310#1e-10*min(rep[is.finite(rep)])
+    # }else{
+    #   rep[! is.finite(rep)]=1e-310
+    # }
+  }
+  
+  return(rep)
+}
+
+Khi_ClaDS3=function(phi,s,t,func="Khi",lambda1=0,lambda2=0,lambdas=phi$lambda,M=phi$M,mu=phi$mu,
+                    timePhi=phi$fun[,1],nt=1000,method="Higham08.b",banded=0,sparse=F,interval=2,conv=1e-10){
   
   if((0.99*t)>phi$fun[nrow(phi$fun),1]) return(rep(1e-300,length(phi$expLambda)))
   if( !(func %in% c("Khi","Psi","Ksi","Zeta"))){stop("the function is not known")}
@@ -245,7 +375,7 @@ Khi_ClaDS2=function(phi,s,t,func="Khi",lambda1=0,lambda2=0,lambdas=phi$lambda,M=
     MATVECT <- selectMethod(applyV, c(class(M), class(ini)))
     dKhi=function(t,y,parms){
       tindex=which.min(abs(timePhi-t))
-      dy=2*expLambda*((MATVECT(M,y))*(MATVECT(M,phi$fun[tindex,2:ncol(phi$fun)]))) - (expLambda*(1+mu))*y
+      dy=2*expLambda*((MATVECT(M,y))*(MATVECT(M,phi$fun[tindex,2:ncol(phi$fun)]))) - (expLambda+mu)*y
       return(list(dy))
     }
     out <- ode(y = ini, times = timePhi, func = dKhi, parms = NULL)
@@ -256,7 +386,7 @@ Khi_ClaDS2=function(phi,s,t,func="Khi",lambda1=0,lambda2=0,lambdas=phi$lambda,M=
     do=T
     while(do){
       done=T
-      rep = try(MagnusExpansion_ClaDS2(phi,ini,tini,tend,inter,conv=conv,timeIni=s,timeEnd=t))
+      rep = try(MagnusExpansion_ClaDS3(phi,ini,tini,tend,inter,conv=conv,timeIni=s,timeEnd=t))
       do=inherits(rep,"try-error")
       # if(! do) do=(min(rep)<0)
       if(! do & func=="Khi"){ do=(max(rep)>1)}else{do=(max(rep)>(max(1+exp(expLambda*(s-t)))*max(ini)))}# | any(rep<0))}
@@ -267,15 +397,15 @@ Khi_ClaDS2=function(phi,s,t,func="Khi",lambda1=0,lambda2=0,lambdas=phi$lambda,M=
       }
     }
   }
-  if(! done) rep=exp(- (expLambda*(1+phi$mu))*(t - s))*ini
+  if(! done) rep=exp(- (expLambda+phi$mu)*(t - s))*ini
   changeRep=(! is.finite(rep) | rep<=0)
-  rep[changeRep]=exp(- (expLambda[changeRep]*(1+phi$mu))*(t - s))*ini[changeRep]#1e-310#1e-10*min(rep[is.finite(rep)])
+  rep[changeRep]=exp(- (expLambda[changeRep]+phi$mu)*(t - s))*ini[changeRep]#1e-310#1e-10*min(rep[is.finite(rep)])
   rep[rep==0]=1e-300
   if(func=="Psi"|func=="Zeta"){
     rep=rep/(1-phi$fun[tend,-1])
     changeRep=(! is.finite(rep) | rep<=0)
     # if(sum(is.finite(rep))>0){
-    rep[changeRep]=exp(- (expLambda[changeRep]*(1+phi$mu))*(t - s))*ini[changeRep]#1e-310#1e-10*min(rep[is.finite(rep)])
+    rep[changeRep]=exp(- (expLambda[changeRep]+phi$mu)*(t - s))*ini[changeRep]#1e-310#1e-10*min(rep[is.finite(rep)])
     # }else{
     #   rep[! is.finite(rep)]=1e-310
     # }
@@ -283,7 +413,6 @@ Khi_ClaDS2=function(phi,s,t,func="Khi",lambda1=0,lambda2=0,lambdas=phi$lambda,M=
   
   return(rep)
 }
-
 
 createLikelihood_ClaDS2 <- function(phylo, root_depth=0, relative = F,nt=1000,nlambda=100,method="FFT",
                                          mlambda=1e-25,Mlambda=1e10,interval=nt,verbose=F,conv=1e-10,div=30){

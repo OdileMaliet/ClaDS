@@ -148,7 +148,7 @@ MagnusExpansion_ClaDS1=function(phi,ini,tini,tend,step,conv=1e-10,mask_val=-20,t
     EXPOV[mask] = 0
     ini = EXPOV
   }
-  EXPOV[mask] = exp(- (expLambda[mask]+mu[mask])*(timeEnd - timeIni))*iniRep[mask]
+  EXPOV[mask] = exp(- (expLambda[mask]+mu)*(timeEnd - timeIni))*iniRep[mask]
   return(EXPOV)
 }
 
