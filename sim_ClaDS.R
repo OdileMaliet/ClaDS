@@ -4,7 +4,7 @@ library(phytools)
 
 sim_ClaDS <- function (lamb_par, mu_par,theta=1,
                                        f.lamb=function(x,y){y}, f.mu=function(x,y){y}, 
-                                       lamb_shift=1,
+                                       lamb_shift=1,mu_shift=1,
                                        new_lamb_law="lognormal*shift",new_mu_law="turnover",alpha=0, 
                                        sigma=0.1,lamb_max=1,lamb_min=0,mu_min=mu_par,mu_max=mu_par, 
                                        time.stop = 0, 
@@ -29,7 +29,7 @@ sim_ClaDS <- function (lamb_par, mu_par,theta=1,
 # set new_mu_law="uniform", mu_min=mu_max=mu_par
 
 # relative_death For new_mu_law="diversify" or "turnover", diversification or turnover rate. Not used in other cases
-# sigma=0.1 standard deviation for new_lamb_law = "normal", "lognormal", "normal*t", "lognormal*shift", "normal+shift", "normal*shift"
+# sigma=0.1 standard deviation for new_lamb_law = "normal", "lognormal", "normal*t", "lognormal*t", "lognormal*shift", "normal+shift", "normal*shift"
 # sigma_mu standard deviation for new_mu_law = "normal", "lognormal", "normal*t"
 
 # lamb_max,lamb_min,mu_min,mu_max, limits of the uniform laws
@@ -106,6 +106,10 @@ sim_ClaDS <- function (lamb_par, mu_par,theta=1,
               lamb=c(lamb,rlnorm(1, meanlog = log(lamb[[1]]),sdlog = sigma))
           }else if (new_lamb_law=="lognormal*shift"){
             lamb=c(lamb,rlnorm(1, meanlog = log(lamb[[1]]*lamb_shift),sdlog = sigma))
+          }else if (new_lamb_law=="lognormal*t"){
+            lamb=c(lamb,rlnorm(1, meanlog = log(lamb[[1]]),sdlog = sigma*t))
+          }else if (new_lamb_law=="logbrownian"){
+            lamb=c(lamb,rlnorm(1, meanlog = log(lamb[[1]]),sdlog = sigma*sqrt(t)))
           }else if (new_lamb_law=="normal*t"){
             new_lambda=rnorm(1,mean=lamb[[i]],sd=sigma*t)
             while(new_lambda<0){
@@ -142,6 +146,8 @@ sim_ClaDS <- function (lamb_par, mu_par,theta=1,
             mu=c(mu,new_mu)
           }else if (new_mu_law=="lognormal"){
             mu=c(mu,rlnorm(1, meanlog = log(mu[[1]]),sdlog = sigma_mu))
+          }else if (new_mu_law=="lognormal*shift"){
+            mu=c(mu,rlnorm(1, meanlog = log(mu[[1]]*mu_shift),sdlog = sigma_mu))
           }else if (new_mu_law=="normal*t"){
             new_mu=rnorm(1,mean=mu[[i]],sd=sigma_mu*t)
             while(new_mu<0){
@@ -268,6 +274,10 @@ sim_ClaDS <- function (lamb_par, mu_par,theta=1,
     		        }else if (new_lamb_law=="lognormal*shift"){
     		          #mean lamb[[i]] iff lamb_shift==exp(-sigma^2/2)
     		          lamb=c(lamb,rlnorm(1, meanlog = log(lamb[[i]]*lamb_shift),sdlog = sigma))
+    		        }else if (new_lamb_law=="lognormal*t"){
+    		          lamb=c(lamb,rlnorm(1, meanlog = log(lamb[[i]]),sdlog = sigma*edge.length[x]))
+    		        }else if (new_lamb_law=="logbrownian"){
+    		          lamb=c(lamb,rlnorm(1, meanlog = log(lamb[[i]]),sdlog = sigma*sqrt(edge.length[x])))
     		        }else if (new_lamb_law=="normal*t"){
     		          new_lambda=rnorm(1,mean=lamb[[i]],sd=sigma*edge.length[x])
     		          while(new_lambda<0){
@@ -303,6 +313,8 @@ sim_ClaDS <- function (lamb_par, mu_par,theta=1,
     		          mu=c(mu,new_mu)
     		        }else if (new_mu_law=="lognormal"){
     		          mu=c(mu,rlnorm(1, meanlog = log(mu[[i]]),sdlog = sigma_mu))
+    		        }else if (new_mu_law=="lognormal*shift"){
+    		          mu=c(mu,rlnorm(1, meanlog = log(mu[[i]]*mu_shift),sdlog = sigma_mu))
     		        }
     		        else if (new_mu_law=="normal*t"){
     		          new_mu=rnorm(1,mean=mu[[i]],sd=sigma_mu*edge.length[x])
@@ -357,7 +369,7 @@ sim_ClaDS <- function (lamb_par, mu_par,theta=1,
     }
     }
     							
-	if ((sum(alive)==0 & prune.extinct) | length(nblineages)==2) {obj<-NULL; root_length=t}
+	if ((sum(alive)==0 & prune.extinct) | (length(nblineages)==2 & !prune.extinct)) {obj<-NULL; root_length=t} #
  	else if (sum(alive)==1 & prune.extinct) {obj<-list(nbTaxa=1,"maxRate"=tooHigh); root_length=t}
  	else {
  	  edge.length[alive] <- t - stem.depth[alive]
@@ -416,7 +428,7 @@ prune.extinct.with.rates=function(phy,rates,extinct=NULL)
 
 rigth.order=function(phy,rates){
   n=phy$Nnode+1
-  root=which(sapply(1:(phy$Nnode*2+1),function(x){!(x %in% phy$edge[,2])}))
+  root=which(sapply(1:max(phy$edge),function(x){!(x %in% phy$edge[,2])}))
   next_node=c(root)
   order=rep(0,2*n-1)
   is.tip=c()
