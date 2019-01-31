@@ -2,6 +2,7 @@
 
 # chose your working directory : put the path of the downloaded Rcode folder below
 setwd("~/Documents/ClaDS/")
+library(TESS)
 
 # loading the needed functions
 source("likelihood_ClaDS0.R")
@@ -21,9 +22,6 @@ dyn.load("diversif_lognormal.so")
 
 
 #### 2. Simulating trees from the model #####
-
-# this function is not written in the most user friendly way for now, but here is an 
-# example of how to use it, with the most unsefull options
 
 set.seed(1)
 
@@ -73,6 +71,7 @@ sampler = run_ClaDS0(tree=tree,        # the data
 # if the exemple in 3. takes too long to run, it is saved in the attached file "example.Rdata"
 
 load("example_ClaDS0.Rdata")
+sampler_ClaDS0=sampler
 
 ntips=tree$Nnode+1
 nedges=2*tree$Nnode
@@ -119,8 +118,8 @@ sampler = prepare_ClaDS(tree=tree,          # the phylogeny
                         Nchain = 3,         # number of MCMC chains
                         nlambda = 1000,     # number of lambdaspace steps in likelihood function
                         nt = 30,            # number of time steps in likelihood function
-                        model_id="ClaDS2")  # use model_id = "ClaDS1" for constant extinction rate
-
+                        model_id="ClaDS2",  # use model_id = "ClaDS1" for constant extinction rate
+                        res_ClaDS0 = sampler_ClaDS0)  # the output of ClaDS0 to use as a startpoint. If NULL (the default)a random startpoint is used 
 # and run it
 sampler = fit_ClaDS(           
   mcmcSampler = sampler,       # an object as returned by prepare ClaDS or fit_ClaDS
@@ -130,7 +129,7 @@ sampler = fit_ClaDS(
 
 
 # you can continue to run a fit
-sampler = fit_ClaDS(mcmcSampler = sampler,iterations = 1000,thin = 50, nCPU = 3)
+sampler = fit_ClaDS(mcmcSampler = sampler,iterations = 100,thin = 50, nCPU = 3)
 
 # and plot the results
 plotChains_ClaDS(sampler)
